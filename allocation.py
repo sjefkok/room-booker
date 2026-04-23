@@ -1,5 +1,5 @@
 """
-Allocation engine for the KPMG Room Booker.
+Allocation engine for the Room Booker.
 
 Implements the optimised round-based allocation algorithm:
 1. Requests are collected per week (deadline: Thursday 17:00).

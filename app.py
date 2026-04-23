@@ -10,7 +10,7 @@ import allocation as alloc
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="KPMG Room Booker",
+    page_title="Room Booker",
     page_icon="🏢",
     layout="wide",
 )
@@ -38,7 +38,7 @@ def _get_week_range(monday: date) -> tuple[str, str]:
 
 # ── Sidebar navigation ───────────────────────────────────────────────────────
 
-st.sidebar.title("🏢 KPMG Room Booker")
+st.sidebar.title("🏢 Room Booker")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "Navigation",
