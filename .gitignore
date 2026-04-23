@@ -1,0 +1,6 @@
+roombooker.db
+database_sqlite_backup.py
+database_gsheets.py
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
