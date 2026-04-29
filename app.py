@@ -183,14 +183,14 @@ elif page == "📅 Week Overview":
         for a in allocations:
             d = date.fromisoformat(a["date"])
             day_abbr = DAY_ABBR[d.weekday()]
-            matrix[a["room_name"]][day_abbr] = f"📁 {a['project_name']}"
+            matrix[a["room_name"]][day_abbr] = f"📁 {a['project_name']} - {a['requester']}"
 
         # Fill with direct bookings
         directs = db.get_direct_bookings_for_week(week_start, week_end)
         for b in directs:
             d = date.fromisoformat(b["date"])
             day_abbr = DAY_ABBR[d.weekday()]
-            matrix[b["room_name"]][day_abbr] = f"📁 {b['project_name']}"
+            matrix[b["room_name"]][day_abbr] = f"📁 {b['project_name']} - {b['requester']}"
 
         # Display
         df = pd.DataFrame(matrix).T
