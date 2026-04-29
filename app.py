@@ -7,6 +7,28 @@ from datetime import date, datetime, timedelta
 import database as db
 import allocation as alloc
 
+# ── Auto-allocate past-deadline weeks ─────────────────────────────────────────
+
+def _auto_allocate():
+    """Run allocation for any week where the deadline has passed but requests
+    are still pending (i.e. not yet allocated)."""
+    for monday in alloc.get_available_weeks():
+        if not alloc.is_after_deadline(monday):
+            continue
+        week_start = monday.isoformat()
+        requests = db.get_requests_for_week(week_start)
+        if not requests:
+            continue
+        # Check if allocation already ran (allocations exist for these requests)
+        week_end = (monday + timedelta(days=4)).isoformat()
+        existing = db.get_allocations_for_week(week_start, week_end)
+        existing_req_ids = {a.get("request_id") for a in existing}
+        pending_req_ids = {r["id"] for r in requests}
+        if pending_req_ids - existing_req_ids:
+            alloc.run_allocation(week_start)
+
+_auto_allocate()
+
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
