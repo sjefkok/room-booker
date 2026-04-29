@@ -64,6 +64,9 @@ page = st.sidebar.radio(
     ["📋 New Request", "📅 Week Overview", "📌 Manage Bookings"],
 )
 
+# Clear data cache on every page load to ensure fresh data
+db._invalidate_cache()
+
 st.sidebar.markdown("---")
 st.sidebar.caption("Deals Strategy — Room Allocation Tool")
 
