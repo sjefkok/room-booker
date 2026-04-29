@@ -233,11 +233,11 @@ def clear_allocations_for_week(week_start: str, week_end: str):
 
 
 def _enrich_allocation(a: dict, rooms_by_id: dict) -> dict:
+    a = dict(a)  # copy to avoid mutating cache
     room = rooms_by_id.get(a.get("room_id"))
-    if room:
-        a["room_name"] = room["name"]
-        a["capacity"] = room["capacity"]
-        a["floor"] = room["floor"]
+    a["room_name"] = room["name"] if room else "?"
+    a["capacity"] = room["capacity"] if room else ""
+    a["floor"] = room["floor"] if room else ""
     return a
 
 
@@ -281,11 +281,11 @@ def create_direct_booking(room_id: int, date_str: str, project_name: str,
 
 
 def _enrich_direct(d: dict, rooms_by_id: dict) -> dict:
+    d = dict(d)  # copy to avoid mutating cache
     room = rooms_by_id.get(d.get("room_id"))
-    if room:
-        d["room_name"] = room["name"]
-        d["capacity"] = room["capacity"]
-        d["floor"] = room["floor"]
+    d["room_name"] = room["name"] if room else "?"
+    d["capacity"] = room["capacity"] if room else ""
+    d["floor"] = room["floor"] if room else ""
     return d
 
 
@@ -353,15 +353,15 @@ def get_all_upcoming_bookings():
 
     for a in _all_records("allocations"):
         if a.get("date", "") >= today:
-            _enrich_allocation(a, rooms)
-            a["source"] = "allocation"
-            results.append(a)
+            enriched = _enrich_allocation(a, rooms)
+            enriched["source"] = "allocation"
+            results.append(enriched)
 
     for d in _all_records("direct_bookings"):
         if d.get("date", "") >= today:
-            _enrich_direct(d, rooms)
-            d["source"] = "direct"
-            results.append(d)
+            enriched = _enrich_direct(d, rooms)
+            enriched["source"] = "direct"
+            results.append(enriched)
 
     return sorted(results, key=lambda r: r.get("date", ""))
 
