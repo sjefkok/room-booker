@@ -19,13 +19,10 @@ def _auto_allocate():
         requests = db.get_requests_for_week(week_start)
         if not requests:
             continue
-        # Check if allocation already ran (allocations exist for these requests)
-        week_end = (monday + timedelta(days=4)).isoformat()
-        existing = db.get_allocations_for_week(week_start, week_end)
-        existing_req_ids = {a.get("request_id") for a in existing}
-        pending_req_ids = {r["id"] for r in requests}
-        if pending_req_ids - existing_req_ids:
-            alloc.run_allocation(week_start)
+        # Run allocation and then delete the processed requests
+        alloc.run_allocation(week_start)
+        for req in requests:
+            db.delete_request(req["id"])
 
 _auto_allocate()
 
