@@ -195,6 +195,8 @@ def create_request(project_name: str, requester: str, team_size: int,
 
 def _archive_request(project_name: str, requester: str, team_size: int,
                      week_start: str, desired_days: list[str], created_at: str):
+    # Remove any existing archive entry for same project + week (prevents duplicates on resubmit)
+    _delete_archive_entry(project_name, week_start)
     ws = _get_worksheet("request_archive")
     new_id = _next_id("request_archive")
     _api_call(ws.append_row, [
@@ -205,17 +207,35 @@ def _archive_request(project_name: str, requester: str, team_size: int,
     _invalidate_cache("request_archive")
 
 
+def _delete_archive_entry(project_name: str, week_start: str):
+    """Delete archive entry matching project_name + week_start (case-insensitive)."""
+    ws = _get_worksheet("request_archive")
+    rows = _api_call(ws.get_all_values)
+    pn_lower = project_name.strip().lower()
+    for i in range(len(rows) - 1, 0, -1):  # reverse to avoid index shift
+        if rows[i][1].strip().lower() == pn_lower and rows[i][4] == week_start:
+            _api_call(ws.delete_rows, i + 1)
+    _invalidate_cache("request_archive")
+
+
 def get_requests_for_week(week_start: str):
     records = _all_records("requests")
     return [r for r in records if r.get("week_start") == week_start]
 
 
-def delete_request(request_id: int):
+def delete_request(request_id: int, keep_archive: bool = False):
+    # Look up project_name + week_start before deleting so we can clean archive too
+    records = _all_records("requests")
+    match = next((r for r in records if r.get("id") == request_id), None)
     row_idx = _find_row_index("requests", request_id)
     if row_idx:
         ws = _get_worksheet("requests")
-        ws.delete_rows(row_idx)
+        _api_call(ws.delete_rows, row_idx)
         _invalidate_cache("requests")
+        # Also remove from archive so distribution table stays accurate
+        # (skip when allocation consumes the request — archive needed for history)
+        if match and not keep_archive:
+            _delete_archive_entry(match["project_name"], match["week_start"])
 
 
 # ── Allocations CRUD ──────────────────────────────────────────────────────────

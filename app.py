@@ -25,7 +25,7 @@ def _auto_allocate():
         # This prevents double allocation from concurrent page loads.
         req_copies = [dict(r) for r in requests]
         for req in requests:
-            db.delete_request(req["id"])
+            db.delete_request(req["id"], keep_archive=True)
         result = alloc.run_allocation(week_start, prefetched_requests=req_copies)
         # Show allocation result to user
         st.toast(f"✅ Auto-allocated Week {monday.isocalendar()[1]}: "
