@@ -20,9 +20,13 @@ def _auto_allocate():
         if not requests:
             continue
         # Run allocation and then delete the processed requests
-        alloc.run_allocation(week_start)
+        result = alloc.run_allocation(week_start)
         for req in requests:
             db.delete_request(req["id"])
+        # Show allocation result to user
+        st.toast(f"✅ Auto-allocated Week {monday.isocalendar()[1]}: "
+                 f"{len(result['allocations'])} room(s) assigned, "
+                 f"{len(result['unmet'])} unmet.")
 
 _auto_allocate()
 
