@@ -341,8 +341,8 @@ elif page == "📌 Manage Bookings":
                                     db.cancel_allocation(b["id"])
                                 else:
                                     db.cancel_direct_booking(b["id"])
-                            st.success(f"Booking on {day_name} {d.strftime('%d %b')} cancelled.")
-                            st.rerun()
+                                st.success(f"Booking on {day_name} {d.strftime('%d %b')} cancelled.")
+                                st.rerun()
     else:
         st.info("No upcoming bookings found." + (" Adjust your filter." if search_term else ""))
 
