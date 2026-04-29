@@ -7,6 +7,9 @@ from datetime import date, datetime, timedelta
 import database as db
 import allocation as alloc
 
+# Always start with fresh data
+db._invalidate_cache()
+
 # ── Auto-allocate past-deadline weeks ─────────────────────────────────────────
 
 def _auto_allocate():
@@ -63,9 +66,6 @@ page = st.sidebar.radio(
     "Navigation",
     ["📋 New Request", "📅 Week Overview", "📌 Manage Bookings"],
 )
-
-# Clear data cache on every page load to ensure fresh data
-db._invalidate_cache()
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Deals Strategy — Room Allocation Tool")
