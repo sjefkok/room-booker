@@ -230,6 +230,34 @@ elif page == "📅 Week Overview":
         else:
             st.info("No bookings this week yet.")
 
+        # Download bookings as CSV
+        all_bookings = allocations + directs
+        if all_bookings:
+            st.markdown("---")
+            st.subheader("📥 Download bookings")
+            download_rows = []
+            for b in sorted(all_bookings, key=lambda x: (x.get("date", ""), x.get("room_name", ""))):
+                d = date.fromisoformat(b["date"])
+                download_rows.append({
+                    "Day": DAY_NAMES[d.weekday()],
+                    "Date": d.strftime("%d %b %Y"),
+                    "Project": b.get("project_name", ""),
+                    "Requester": b.get("requester", ""),
+                    "Room": b.get("room_name", ""),
+                    "Capacity": b.get("capacity", ""),
+                    "Floor": b.get("floor", ""),
+                    "Team size": b.get("team_size", ""),
+                })
+            download_df = pd.DataFrame(download_rows)
+            st.dataframe(download_df, use_container_width=True, hide_index=True)
+            csv = download_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="⬇️ Download as CSV",
+                data=csv,
+                file_name=f"room_bookings_week_{selected_monday.isocalendar()[1]}.csv",
+                mime="text/csv",
+            )
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE: Mijn Boekingen
