@@ -1,7 +1,7 @@
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
 
 # ── Google Sheets Connection ──────────────────────────────────────────────────
@@ -273,11 +273,27 @@ def get_allocations_for_week(week_start: str, week_end: str):
 
 
 def cancel_allocation(allocation_id: int):
+    # Look up the allocation before deleting so we can clean archive if needed
+    records = _all_records("allocations")
+    match = next((r for r in records if r.get("id") == allocation_id), None)
     row_idx = _find_row_index("allocations", allocation_id)
     if row_idx:
         ws = _get_worksheet("allocations")
-        ws.delete_rows(row_idx)
+        _api_call(ws.delete_rows, row_idx)
         _invalidate_cache("allocations")
+        # If no allocations remain for this project+week, remove archive entry
+        if match:
+            pn = match.get("project_name", "")
+            d = match.get("date", "")
+            if d:
+                monday = date.fromisoformat(d) - timedelta(days=date.fromisoformat(d).weekday())
+                week_start = monday.isoformat()
+                week_end = (monday + timedelta(days=4)).isoformat()
+                remaining = [r for r in _all_records("allocations")
+                             if r.get("project_name") == pn
+                             and week_start <= r.get("date", "") <= week_end]
+                if not remaining:
+                    _delete_archive_entry(pn, week_start)
 
 
 # ── Direct Bookings ───────────────────────────────────────────────────────────
