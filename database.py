@@ -13,7 +13,7 @@ SCOPES = [
 
 # In-memory cache to avoid hitting API rate limits
 _cache = {}
-_cache_ttl = 10  # seconds
+_cache_ttl = 15  # seconds
 
 
 def _invalidate_cache(ws_name: str | None = None):
@@ -32,6 +32,18 @@ SHEET_HEADERS = {
 }
 
 
+def _api_call(fn, *args, **kwargs):
+    """Wrap any gspread call with retry logic for rate limits."""
+    for attempt in range(3):
+        try:
+            return fn(*args, **kwargs)
+        except gspread.exceptions.APIError as e:
+            if e.response.status_code == 429 and attempt < 2:
+                time.sleep(2 ** attempt)  # 1s, 2s
+                continue
+            raise
+
+
 @st.cache_resource
 def _get_client():
     creds = Credentials.from_service_account_info(
@@ -40,18 +52,25 @@ def _get_client():
     return gspread.authorize(creds)
 
 
+@st.cache_resource
 def _get_spreadsheet():
     client = _get_client()
     return client.open_by_key(st.secrets["spreadsheet_id"])
 
 
+# Cache worksheet objects to avoid repeated lookups
+_ws_cache = {}
+
 def _get_worksheet(name: str):
+    if name in _ws_cache:
+        return _ws_cache[name]
     ss = _get_spreadsheet()
     try:
         ws = ss.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         ws = ss.add_worksheet(title=name, rows=1000, cols=len(SHEET_HEADERS[name]))
         ws.append_row(SHEET_HEADERS[name])
+    _ws_cache[name] = ws
     return ws
 
 
@@ -62,7 +81,7 @@ def _all_records(ws_name: str) -> list[dict]:
         return _cache[ws_name]["data"]
 
     ws = _get_worksheet(ws_name)
-    rows = ws.get_all_records()
+    rows = _api_call(ws.get_all_records)
     # Ensure integer fields are int
     int_fields = {"id", "capacity", "team_size", "request_id", "room_id"}
     for row in rows:
@@ -163,7 +182,7 @@ def create_request(project_name: str, requester: str, team_size: int,
     ws = _get_worksheet("requests")
     new_id = _next_id("requests")
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ws.append_row([
+    _api_call(ws.append_row, [
         new_id, project_name, requester, team_size,
         week_start, ",".join(desired_days),
         created_at,
@@ -178,7 +197,7 @@ def _archive_request(project_name: str, requester: str, team_size: int,
                      week_start: str, desired_days: list[str], created_at: str):
     ws = _get_worksheet("request_archive")
     new_id = _next_id("request_archive")
-    ws.append_row([
+    _api_call(ws.append_row, [
         new_id, project_name, requester, team_size,
         week_start, ",".join(desired_days), len(desired_days),
         created_at,
