@@ -362,9 +362,15 @@ def get_week_fairness(week_start: str, week_end: str):
     allocs = _all_records("allocations")
     directs = _all_records("direct_bookings")
     archive = _all_records("request_archive")
+    requests = _all_records("requests")
     allocated = {}
+    seen_alloc = set()
     for r in allocs:
         if week_start <= r.get("date", "") <= week_end:
+            key = (r.get("room_id"), r.get("date"))
+            if key in seen_alloc:
+                continue
+            seen_alloc.add(key)
             pn = r.get("project_name", "")
             allocated[pn] = allocated.get(pn, 0) + 1
     for r in directs:
@@ -372,6 +378,7 @@ def get_week_fairness(week_start: str, week_end: str):
             pn = r.get("project_name", "")
             allocated[pn] = allocated.get(pn, 0) + 1
     requested = {}
+    # Primary source: request archive
     for r in archive:
         if r.get("week_start") == week_start:
             pn = r.get("project_name", "")
@@ -381,8 +388,15 @@ def get_week_fairness(week_start: str, week_end: str):
             except (ValueError, TypeError):
                 num = 0
             requested[pn] = requested.get(pn, 0) + num
+    # Fallback: live requests (for projects not yet in archive)
+    for r in requests:
+        if r.get("week_start") == week_start:
+            pn = r.get("project_name", "")
+            if pn not in requested:
+                dd = r.get("desired_days", "")
+                requested[pn] = len(dd.split(",")) if dd else 0
     all_projects = set(allocated) | set(requested)
-    return {pn: {"requested": requested.get(pn, allocated.get(pn, 0)),
+    return {pn: {"requested": requested.get(pn, 0),
                  "allocated": allocated.get(pn, 0)} for pn in all_projects}
 
 
