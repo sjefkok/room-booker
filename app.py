@@ -16,13 +16,17 @@ def _auto_allocate():
         if not alloc.is_after_deadline(monday):
             continue
         week_start = monday.isoformat()
+        # Force fresh read from sheet (bypass cache) to avoid race conditions
+        db._invalidate_cache("requests")
         requests = db.get_requests_for_week(week_start)
         if not requests:
             continue
-        # Run allocation and then delete the processed requests
-        result = alloc.run_allocation(week_start)
+        # Delete requests FIRST to prevent double allocation from concurrent loads
+        req_copies = [dict(r) for r in requests]
         for req in requests:
             db.delete_request(req["id"])
+        # Now run allocation
+        result = alloc.run_allocation(week_start)
         # Show allocation result to user
         st.toast(f"✅ Auto-allocated Week {monday.isocalendar()[1]}: "
                  f"{len(result['allocations'])} room(s) assigned, "

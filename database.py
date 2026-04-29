@@ -264,7 +264,15 @@ def get_allocations_for_week(week_start: str, week_end: str):
     records = _all_records("allocations")
     rooms = {r["id"]: r for r in get_all_rooms()}
     result = [r for r in records if week_start <= r.get("date", "") <= week_end]
-    return [_enrich_allocation(r, rooms) for r in sorted(result, key=lambda r: (r.get("date", ""), r.get("room_id", 0)))]
+    # Deduplicate by (room_id, date) — keep first occurrence only
+    seen = set()
+    deduped = []
+    for r in sorted(result, key=lambda r: (r.get("date", ""), r.get("room_id", 0))):
+        key = (r.get("room_id"), r.get("date"))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
+    return [_enrich_allocation(r, rooms) for r in deduped]
 
 
 def get_allocations_for_date(date_str: str):
@@ -382,9 +390,14 @@ def get_all_upcoming_bookings():
     today = date.today().isoformat()
     rooms = {r["id"]: r for r in get_all_rooms()}
     results = []
+    seen = set()
 
     for a in _all_records("allocations"):
         if a.get("date", "") >= today:
+            key = (a.get("room_id"), a.get("date"))
+            if key in seen:
+                continue
+            seen.add(key)
             enriched = _enrich_allocation(a, rooms)
             enriched["source"] = "allocation"
             results.append(enriched)
@@ -465,3 +478,27 @@ def get_occupancy_stats(week_start: str, week_end: str):
 
 init_db()
 seed_rooms()
+
+
+def cleanup_duplicate_allocations():
+    """Remove duplicate rows from the allocations sheet (same room_id + date)."""
+    ws = _get_worksheet("allocations")
+    rows = _api_call(ws.get_all_values)
+    if len(rows) <= 1:
+        return
+    seen = set()
+    to_delete = []
+    for i, row in enumerate(rows):
+        if i == 0:
+            continue  # header
+        key = (row[2], row[3])  # room_id, date
+        if key in seen:
+            to_delete.append(i + 1)
+        else:
+            seen.add(key)
+    for idx in reversed(to_delete):
+        _api_call(ws.delete_rows, idx)
+    if to_delete:
+        _invalidate_cache("allocations")
+
+cleanup_duplicate_allocations()
