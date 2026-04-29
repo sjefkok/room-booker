@@ -228,7 +228,8 @@ elif page == "📅 Week Overview":
         fairness = db.get_week_fairness(week_start, week_end)
         if fairness:
             fair_df = pd.DataFrame(
-                [{"Project": k, "Room days": v} for k, v in fairness.items()]
+                [{"Project": k, "Days requested": v["requested"], "Days allocated": v["allocated"]}
+                 for k, v in fairness.items()]
             )
             st.dataframe(fair_df, use_container_width=True, hide_index=True)
         else:

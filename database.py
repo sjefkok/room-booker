@@ -353,16 +353,29 @@ def get_booked_room_ids_for_date(date_str: str):
 def get_week_fairness(week_start: str, week_end: str):
     allocs = _all_records("allocations")
     directs = _all_records("direct_bookings")
-    counts = {}
+    archive = _all_records("request_archive")
+    allocated = {}
     for r in allocs:
         if week_start <= r.get("date", "") <= week_end:
             pn = r.get("project_name", "")
-            counts[pn] = counts.get(pn, 0) + 1
+            allocated[pn] = allocated.get(pn, 0) + 1
     for r in directs:
         if week_start <= r.get("date", "") <= week_end:
             pn = r.get("project_name", "")
-            counts[pn] = counts.get(pn, 0) + 1
-    return counts
+            allocated[pn] = allocated.get(pn, 0) + 1
+    requested = {}
+    for r in archive:
+        if r.get("week_start") == week_start:
+            pn = r.get("project_name", "")
+            num = r.get("num_days", 0)
+            try:
+                num = int(num)
+            except (ValueError, TypeError):
+                num = 0
+            requested[pn] = requested.get(pn, 0) + num
+    all_projects = set(allocated) | set(requested)
+    return {pn: {"requested": requested.get(pn, allocated.get(pn, 0)),
+                 "allocated": allocated.get(pn, 0)} for pn in all_projects}
 
 
 def get_all_upcoming_bookings():
