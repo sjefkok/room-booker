@@ -28,6 +28,7 @@ SHEET_HEADERS = {
     "requests":        ["id", "project_name", "requester", "team_size", "week_start", "desired_days", "created_at"],
     "allocations":     ["id", "request_id", "room_id", "date", "project_name", "requester", "team_size", "created_at"],
     "direct_bookings": ["id", "room_id", "date", "project_name", "requester", "team_size", "created_at"],
+    "request_archive": ["id", "project_name", "requester", "team_size", "week_start", "desired_days", "num_days", "created_at"],
 }
 
 
@@ -161,12 +162,28 @@ def create_request(project_name: str, requester: str, team_size: int,
                    week_start: str, desired_days: list[str]):
     ws = _get_worksheet("requests")
     new_id = _next_id("requests")
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ws.append_row([
         new_id, project_name, requester, team_size,
         week_start, ",".join(desired_days),
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        created_at,
     ])
     _invalidate_cache("requests")
+    # Archive a copy for administration / facilities reporting
+    _archive_request(project_name, requester, team_size, week_start,
+                     desired_days, created_at)
+
+
+def _archive_request(project_name: str, requester: str, team_size: int,
+                     week_start: str, desired_days: list[str], created_at: str):
+    ws = _get_worksheet("request_archive")
+    new_id = _next_id("request_archive")
+    ws.append_row([
+        new_id, project_name, requester, team_size,
+        week_start, ",".join(desired_days), len(desired_days),
+        created_at,
+    ])
+    _invalidate_cache("request_archive")
 
 
 def get_requests_for_week(week_start: str):
