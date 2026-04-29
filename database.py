@@ -13,7 +13,7 @@ SCOPES = [
 
 # In-memory cache to avoid hitting API rate limits
 _cache = {}
-_cache_ttl = 60  # seconds
+_cache_ttl = 10  # seconds
 
 
 def _invalidate_cache(ws_name: str | None = None):
