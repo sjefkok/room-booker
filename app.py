@@ -245,25 +245,50 @@ elif page == "📌 Manage Bookings":
 
     if all_upcoming:
         st.success(f"{len(all_upcoming)} booking(s) found.")
-        for b in all_upcoming:
-                d = date.fromisoformat(b["date"])
-                day_name = DAY_NAMES[d.weekday()]
-                source_label = "📋 Allocation" if b["source"] == "allocation" else "⚡ Direct"
-                with st.expander(
-                    f"**{day_name} {d.strftime('%d %b')}** — {b['room_name']} ({b['capacity']}p) — {b['project_name']}"
-                ):
-                    st.write(f"**Requester:** {b['requester']}")
-                    st.write(f"**Team size:** {b['team_size']}p")
-                    st.write(f"**Room:** {b['room_name']} ({b['floor']})")
-                    st.write(f"**Type:** {source_label}")
 
-                    if st.button("❌ Cancel booking", key=f"cancel_{b['source']}_{b['id']}"):
+        # Group bookings by project name
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for b in all_upcoming:
+            grouped[b["project_name"]].append(b)
+
+        for project_name, bookings in grouped.items():
+            requester = bookings[0]["requester"]
+            team_size = bookings[0]["team_size"]
+            days_summary = ", ".join(
+                f"{DAY_NAMES[date.fromisoformat(b['date']).weekday()]} {date.fromisoformat(b['date']).strftime('%d %b')}"
+                for b in bookings
+            )
+            with st.expander(
+                f"**{project_name}** — {requester} ({team_size}p) — {len(bookings)} day(s): {days_summary}"
+            ):
+                # Cancel all button
+                if st.button(f"❌ Cancel all bookings for {project_name}", key=f"cancel_all_{project_name}"):
+                    for b in bookings:
                         if b["source"] == "allocation":
                             db.cancel_allocation(b["id"])
                         else:
                             db.cancel_direct_booking(b["id"])
-                        st.success("Booking cancelled — room is now available.")
-                        st.rerun()
+                    st.success(f"All bookings for {project_name} cancelled.")
+                    st.rerun()
+
+                st.markdown("---")
+
+                # Individual day cancellations
+                for b in bookings:
+                    d = date.fromisoformat(b["date"])
+                    day_name = DAY_NAMES[d.weekday()]
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        st.write(f"**{day_name} {d.strftime('%d %b')}** — {b['room_name']} ({b['capacity']}p, {b['floor']})")
+                    with col2:
+                        if st.button("❌", key=f"cancel_{b['source']}_{b['id']}", help=f"Cancel {day_name}"):
+                            if b["source"] == "allocation":
+                                db.cancel_allocation(b["id"])
+                            else:
+                                db.cancel_direct_booking(b["id"])
+                            st.success(f"Booking on {day_name} {d.strftime('%d %b')} cancelled.")
+                            st.rerun()
     else:
         st.info("No upcoming bookings found." + (" Adjust your filter." if search_term else ""))
 
