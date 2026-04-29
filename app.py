@@ -313,15 +313,17 @@ elif page == "📌 Manage Bookings":
             with st.expander(
                 f"**{project_name}** — {requester} ({team_size}p) — {len(bookings)} day(s): {days_summary}"
             ):
-                # Cancel all button
-                if st.button(f"❌ Cancel all bookings for {project_name}", key=f"cancel_all_{project_name}"):
-                    for b in bookings:
-                        if b["source"] == "allocation":
-                            db.cancel_allocation(b["id"])
-                        else:
-                            db.cancel_direct_booking(b["id"])
-                    st.success(f"All bookings for {project_name} cancelled.")
-                    st.rerun()
+                # Cancel all future bookings button
+                future_bookings = [b for b in bookings if date.fromisoformat(b["date"]) >= date.today()]
+                if future_bookings:
+                    if st.button(f"❌ Cancel all future bookings for {project_name}", key=f"cancel_all_{project_name}"):
+                        for b in future_bookings:
+                            if b["source"] == "allocation":
+                                db.cancel_allocation(b["id"])
+                            else:
+                                db.cancel_direct_booking(b["id"])
+                        st.success(f"All future bookings for {project_name} cancelled.")
+                        st.rerun()
 
                 st.markdown("---")
 
@@ -333,11 +335,12 @@ elif page == "📌 Manage Bookings":
                     with col1:
                         st.write(f"**{day_name} {d.strftime('%d %b')}** — {b['room_name']} ({b['capacity']}p, {b['floor']})")
                     with col2:
-                        if st.button("❌", key=f"cancel_{b['source']}_{b['id']}", help=f"Cancel {day_name}"):
-                            if b["source"] == "allocation":
-                                db.cancel_allocation(b["id"])
-                            else:
-                                db.cancel_direct_booking(b["id"])
+                        if d >= date.today():
+                            if st.button("❌", key=f"cancel_{b['source']}_{b['id']}", help=f"Cancel {day_name}"):
+                                if b["source"] == "allocation":
+                                    db.cancel_allocation(b["id"])
+                                else:
+                                    db.cancel_direct_booking(b["id"])
                             st.success(f"Booking on {day_name} {d.strftime('%d %b')} cancelled.")
                             st.rerun()
     else:
