@@ -61,7 +61,7 @@ st.sidebar.title("🏢 Strategy — Room Booker")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "Navigation",
-    ["📋 New Request", "📅 Week Overview", "📌 My Bookings"],
+    ["📋 New Request", "📅 Week Overview", "📌 Manage Bookings"],
 )
 
 st.sidebar.markdown("---")
@@ -276,8 +276,8 @@ elif page == "📅 Week Overview":
 # PAGE: Mijn Boekingen
 # ══════════════════════════════════════════════════════════════════════════════
 
-elif page == "📌 My Bookings":
-    st.title("📌 My Bookings")
+elif page == "📌 Manage Bookings":
+    st.title("📌 Manage Bookings")
 
     search_term = st.text_input(
         "🔍 Filter by project or name",
@@ -330,21 +330,20 @@ elif page == "📌 My Bookings":
             req["_monday"] = monday
             all_pending.append(req)
 
-    # Filters for pending requests
+    # Text search filter for pending requests
     if all_pending:
-        fcol1, fcol2 = st.columns(2)
-        with fcol1:
-            pending_projects = sorted({r["project_name"] for r in all_pending})
-            filter_project = st.selectbox("Filter by project", ["All"] + pending_projects, key="pend_proj")
-        with fcol2:
-            pending_requesters = sorted({r["requester"] for r in all_pending})
-            filter_requester = st.selectbox("Filter by requester", ["All"] + pending_requesters, key="pend_req")
+        pending_search = st.text_input(
+            "🔍 Filter pending requests",
+            placeholder="Type to filter by project or name (optional)...",
+            key="pending_search",
+        )
 
         filtered_pending = all_pending
-        if filter_project != "All":
-            filtered_pending = [r for r in filtered_pending if r["project_name"] == filter_project]
-        if filter_requester != "All":
-            filtered_pending = [r for r in filtered_pending if r["requester"] == filter_requester]
+        if pending_search:
+            q = pending_search.strip().lower()
+            filtered_pending = [r for r in filtered_pending
+                                if q in r["project_name"].lower()
+                                or q in r["requester"].lower()]
 
         if filtered_pending:
             for req in filtered_pending:
