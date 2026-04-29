@@ -38,11 +38,11 @@ def _get_week_range(monday: date) -> tuple[str, str]:
 
 # ── Sidebar navigation ───────────────────────────────────────────────────────
 
-st.sidebar.title("🏢 Room Booker")
+st.sidebar.title("🏢 Strategy — Room Booker")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "Navigation",
-    ["📋 Requests", "📅 Week Overview", "📌 My Bookings"],
+    ["📋 New Request", "📅 Week Overview", "📌 My Bookings"],
 )
 
 st.sidebar.markdown("---")
@@ -53,7 +53,7 @@ st.sidebar.caption("Deals Strategy — Room Allocation Tool")
 # PAGE: Aanvragen (Requests / Direct Booking)
 # ══════════════════════════════════════════════════════════════════════════════
 
-if page == "📋 Requests":
+if page == "📋 New Request":
     st.title("📋 Submit Room Request")
 
     # Week selector
@@ -112,28 +112,10 @@ if page == "📋 Requests":
                     week_start=selected_monday.isoformat(),
                     desired_days=selected_days,
                 )
-                st.success(f"✅ Request submitted for {project_name} — "
-                           f"{len(selected_days)} day(s) requested.")
-                st.rerun()
-
-        # Show existing requests for this week
-        st.markdown("---")
-        st.subheader("Current requests for this week")
-        requests = db.get_requests_for_week(selected_monday.isoformat())
-        if requests:
-            for req in requests:
-                days_str = ", ".join(
-                    DAY_NAMES[date.fromisoformat(d).weekday()]
-                    for d in req["desired_days"].split(",") if d
-                )
-                with st.expander(f"**{req['project_name']}** — {req['requester']} ({req['team_size']}p) → {days_str}"):
-                    st.write(f"**Submitted:** {req['created_at']}")
-                    if st.button("❌ Delete request", key=f"del_req_{req['id']}"):
-                        db.delete_request(req["id"])
-                        st.success("Request deleted.")
-                        st.rerun()
-        else:
-            st.info("No requests for this week yet.")
+                st.balloons()
+                st.success(f"✅ Request submitted for **{project_name}** — "
+                           f"{len(selected_days)} day(s) requested. "
+                           f"You can view it under **My Bookings**.")
 
     else:
         # ── Direct booking modus ──────────────────────────────────────────────
@@ -169,12 +151,13 @@ if page == "📋 Requests":
                                 requester=requester.strip(),
                                 team_size=team_size,
                             )
+                            st.balloons()
                             st.success(
                                 f"✅ Booked: **{selected_room['name']}** on "
                                 f"{DAY_NAMES[selected_date.weekday()]} {selected_date.strftime('%d %b')} "
-                                f"for {project_name}."
+                                f"for **{project_name}**. "
+                                f"You can view it under **My Bookings**."
                             )
-                            st.rerun()
                         except Exception:
                             st.error("This room is already booked on this day.")
             else:
@@ -189,77 +172,85 @@ if page == "📋 Requests":
 elif page == "📅 Week Overview":
     st.title("📅 Week Overview")
 
+    # Only show weeks that have at least one booking
     available_weeks = alloc.get_available_weeks()
-    week_options = {_week_label(m): m for m in available_weeks}
-    selected_label = st.selectbox("Week", list(week_options.keys()))
-    selected_monday = week_options[selected_label]
-    week_start, week_end = _get_week_range(selected_monday)
+    weeks_with_bookings = []
+    for monday in available_weeks:
+        ws, we = _get_week_range(monday)
+        allocs = db.get_allocations_for_week(ws, we)
+        directs = db.get_direct_bookings_for_week(ws, we)
+        if allocs or directs:
+            weeks_with_bookings.append(monday)
 
-    rooms = db.get_all_rooms()
-    days = alloc.week_dates(selected_monday)
-
-    # Build matrix: rows = rooms, cols = days
-    matrix = {}
-    for room in rooms:
-        matrix[room["name"]] = {}
-        for d in days:
-            matrix[room["name"]][DAY_ABBR[d.weekday()]] = ""
-
-    # Fill with allocations
-    allocations = db.get_allocations_for_week(week_start, week_end)
-    for a in allocations:
-        d = date.fromisoformat(a["date"])
-        day_abbr = DAY_ABBR[d.weekday()]
-        matrix[a["room_name"]][day_abbr] = f"📁 {a['project_name']}"
-
-    # Fill with direct bookings
-    directs = db.get_direct_bookings_for_week(week_start, week_end)
-    for b in directs:
-        d = date.fromisoformat(b["date"])
-        day_abbr = DAY_ABBR[d.weekday()]
-        matrix[b["room_name"]][day_abbr] = f"📁 {b['project_name']}"
-
-    # Display
-    df = pd.DataFrame(matrix).T
-    df.index.name = "Room"
-
-    # Add capacity info
-    cap_map = {r["name"]: f"{r['capacity']}p" for r in rooms}
-    df.insert(0, "Cap.", [cap_map.get(name, "") for name in df.index])
-
-    # Style: color cells
-    def color_cells(val):
-        if val and val.startswith("📁"):
-            return "background-color: #FFE082; color: #333; font-weight: bold;"
-        elif val == "":
-            return "background-color: #C8E6C9; color: #2E7D32;"
-        return ""
-
-    styled = df.style.map(color_cells, subset=[c for c in df.columns if c != "Cap."])
-    st.dataframe(styled, use_container_width=True, height=320)
-
-    st.markdown("""
-    <div style="display:flex; gap:20px; margin-top:8px;">
-        <span style="background:#C8E6C9; padding:4px 12px; border-radius:4px;">🟢 Available</span>
-        <span style="background:#FFE082; padding:4px 12px; border-radius:4px;">🟡 Booked</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Fairness overview
-    st.markdown("---")
-    st.subheader("📊 Distribution this week")
-    fairness = db.get_week_fairness(week_start, week_end)
-    if fairness:
-        fair_df = pd.DataFrame(
-            [{"Project": k, "Room days": v} for k, v in fairness.items()]
-        )
-        col1, col2 = st.columns([2, 3])
-        with col1:
-            st.dataframe(fair_df, use_container_width=True, hide_index=True)
-        with col2:
-            st.bar_chart(fair_df.set_index("Project"))
+    if not weeks_with_bookings:
+        st.info("No weeks with allocated rooms yet.")
     else:
-        st.info("No bookings this week yet.")
+        week_options = {_week_label(m): m for m in weeks_with_bookings}
+        selected_label = st.selectbox("Week", list(week_options.keys()))
+        selected_monday = week_options[selected_label]
+        week_start, week_end = _get_week_range(selected_monday)
+
+        rooms = db.get_all_rooms()
+        days = alloc.week_dates(selected_monday)
+
+        # Build matrix: rows = rooms, cols = days
+        matrix = {}
+        for room in rooms:
+            matrix[room["name"]] = {}
+            for d in days:
+                matrix[room["name"]][DAY_ABBR[d.weekday()]] = ""
+
+        # Fill with allocations
+        allocations = db.get_allocations_for_week(week_start, week_end)
+        for a in allocations:
+            d = date.fromisoformat(a["date"])
+            day_abbr = DAY_ABBR[d.weekday()]
+            matrix[a["room_name"]][day_abbr] = f"📁 {a['project_name']}"
+
+        # Fill with direct bookings
+        directs = db.get_direct_bookings_for_week(week_start, week_end)
+        for b in directs:
+            d = date.fromisoformat(b["date"])
+            day_abbr = DAY_ABBR[d.weekday()]
+            matrix[b["room_name"]][day_abbr] = f"📁 {b['project_name']}"
+
+        # Display
+        df = pd.DataFrame(matrix).T
+        df.index.name = "Room"
+
+        # Add capacity info
+        cap_map = {r["name"]: f"{r['capacity']}p" for r in rooms}
+        df.insert(0, "Cap.", [cap_map.get(name, "") for name in df.index])
+
+        # Style: color cells
+        def color_cells(val):
+            if val and val.startswith("📁"):
+                return "background-color: #FFE082; color: #333; font-weight: bold;"
+            elif val == "":
+                return "background-color: #C8E6C9; color: #2E7D32;"
+            return ""
+
+        styled = df.style.map(color_cells, subset=[c for c in df.columns if c != "Cap."])
+        st.dataframe(styled, use_container_width=True, height=320)
+
+        st.markdown("""
+        <div style="display:flex; gap:20px; margin-top:8px;">
+            <span style="background:#C8E6C9; padding:4px 12px; border-radius:4px;">🟢 Available</span>
+            <span style="background:#FFE082; padding:4px 12px; border-radius:4px;">🟡 Booked</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Fairness overview (table only, no bar chart)
+        st.markdown("---")
+        st.subheader("📊 Distribution this week")
+        fairness = db.get_week_fairness(week_start, week_end)
+        if fairness:
+            fair_df = pd.DataFrame(
+                [{"Project": k, "Room days": v} for k, v in fairness.items()]
+            )
+            st.dataframe(fair_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No bookings this week yet.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -311,20 +302,47 @@ elif page == "📌 My Bookings":
     # Also show pending requests
     st.markdown("---")
     st.subheader("📋 Pending requests")
-    has_pending = False
+
+    # Collect all pending requests
+    all_pending = []
     for monday in alloc.get_available_weeks():
         requests = db.get_requests_for_week(monday.isoformat())
-        if search_term:
-            q = search_term.strip().lower()
-            requests = [r for r in requests
-                        if q in r["project_name"].lower() or q in r["requester"].lower()]
         for req in requests:
-            has_pending = True
-            days_str = ", ".join(
-                DAY_NAMES[date.fromisoformat(d).weekday()]
-                for d in req["desired_days"].split(",") if d
-            )
-            st.info(f"**{_week_label(monday)}** — {req['project_name']} ({req['requester']}, "
-                    f"{req['team_size']}p) → {days_str}")
-    if not has_pending:
+            req["_monday"] = monday
+            all_pending.append(req)
+
+    # Filters for pending requests
+    if all_pending:
+        fcol1, fcol2 = st.columns(2)
+        with fcol1:
+            pending_projects = sorted({r["project_name"] for r in all_pending})
+            filter_project = st.selectbox("Filter by project", ["All"] + pending_projects, key="pend_proj")
+        with fcol2:
+            pending_requesters = sorted({r["requester"] for r in all_pending})
+            filter_requester = st.selectbox("Filter by requester", ["All"] + pending_requesters, key="pend_req")
+
+        filtered_pending = all_pending
+        if filter_project != "All":
+            filtered_pending = [r for r in filtered_pending if r["project_name"] == filter_project]
+        if filter_requester != "All":
+            filtered_pending = [r for r in filtered_pending if r["requester"] == filter_requester]
+
+        if filtered_pending:
+            for req in filtered_pending:
+                monday = req["_monday"]
+                days_str = ", ".join(
+                    DAY_NAMES[date.fromisoformat(d).weekday()]
+                    for d in req["desired_days"].split(",") if d
+                )
+                with st.expander(
+                    f"**{_week_label(monday)}** — {req['project_name']} ({req['requester']}, {req['team_size']}p) → {days_str}"
+                ):
+                    st.write(f"**Submitted:** {req['created_at']}")
+                    if st.button("❌ Cancel request", key=f"cancel_req_{req['id']}"):
+                        db.delete_request(req["id"])
+                        st.success("Request cancelled.")
+                        st.rerun()
+        else:
+            st.caption("No pending requests matching filters.")
+    else:
         st.caption("No pending requests.")
