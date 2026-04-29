@@ -75,40 +75,36 @@ st.sidebar.caption("Deals Strategy — Room Allocation Tool")
 if page == "📋 New Request":
     st.title("📋 Submit Room Request")
 
-    # Week selector
+    # Only show weeks where the deadline has NOT yet passed
     available_weeks = alloc.get_available_weeks()
-    week_options = {_week_label(m): m for m in available_weeks}
-    selected_label = st.selectbox("Week", list(week_options.keys()))
-    selected_monday = week_options[selected_label]
+    bookable_weeks = [m for m in available_weeks if alloc.is_before_deadline(m)]
 
-    before_deadline = alloc.is_before_deadline(selected_monday)
+    if not bookable_weeks:
+        st.warning("There are no weeks open for requests at this moment. "
+                   "Check back later when the next week opens up.")
+    else:
+        week_options = {_week_label(m): m for m in bookable_weeks}
+        selected_label = st.selectbox("Week", list(week_options.keys()))
+        selected_monday = week_options[selected_label]
 
-    if before_deadline:
         deadline_thu = selected_monday - timedelta(days=4)
         st.info(
             f"⏰ **Request phase** — Deadline: Thursday {deadline_thu.strftime('%d %b %Y')} at 17:00. "
             f"After the deadline, the allocation will be finalized automatically."
         )
-    else:
-        st.warning(
-            "⚡ **Deadline passed** — Remaining available rooms can be booked directly (first-come, first-served)."
-        )
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # ── Request form / Direct booking form ────────────────────────────────────
+        col1, col2 = st.columns(2)
 
-    col1, col2 = st.columns(2)
+        with col1:
+            project_name = st.text_input("Project name", placeholder="e.g. Project Phoenix")
+            st.caption("⚠️ Do **not** use client names — use internal project names only (confidentiality).")
+        with col2:
+            requester = st.text_input("Requester name", placeholder="e.g. John Smith")
 
-    with col1:
-        project_name = st.text_input("Project name", placeholder="e.g. Project Phoenix")
-    with col2:
-        requester = st.text_input("Requester name", placeholder="e.g. John Smith")
+        team_size = st.number_input("Team size", min_value=1, max_value=10, value=4)
 
-    team_size = st.number_input("Team size", min_value=1, max_value=10, value=4)
-
-    if before_deadline:
-        # ── Aanvraag modus ────────────────────────────────────────────────────
         st.subheader("Preferred days")
         days = alloc.week_dates(selected_monday)
         day_cols = st.columns(5)
@@ -134,54 +130,7 @@ if page == "📋 New Request":
                 st.balloons()
                 st.success(f"✅ Request submitted for **{project_name}** — "
                            f"{len(selected_days)} day(s) requested. "
-                           f"You can view it under **My Bookings**.")
-
-    else:
-        # ── Direct booking modus ──────────────────────────────────────────────
-        st.subheader("Book directly")
-        days = alloc.week_dates(selected_monday)
-        day_options = {DAY_NAMES[d.weekday()]: d for d in days if d >= date.today()}
-
-        if not day_options:
-            st.warning("No bookable days left this week.")
-        else:
-            selected_day_label = st.selectbox("Day", list(day_options.keys()))
-            selected_date = day_options[selected_day_label]
-            date_str = selected_date.isoformat()
-
-            available_rooms = alloc.get_available_rooms(date_str, team_size)
-            if available_rooms:
-                best = available_rooms[0]
-                st.success(f"🎯 Recommended room: **{best['name']}** ({best['capacity']}p, {best['floor']})")
-
-                room_options = {f"{r['name']} ({r['capacity']}p, {r['floor']})": r for r in available_rooms}
-                selected_room_label = st.selectbox("Choose room", list(room_options.keys()))
-                selected_room = room_options[selected_room_label]
-
-                if st.button("✅ Book now", type="primary", use_container_width=True):
-                    if not project_name or not requester:
-                        st.error("Please fill in project name and requester.")
-                    else:
-                        try:
-                            db.create_direct_booking(
-                                room_id=selected_room["id"],
-                                date_str=date_str,
-                                project_name=project_name.strip(),
-                                requester=requester.strip(),
-                                team_size=team_size,
-                            )
-                            st.balloons()
-                            st.success(
-                                f"✅ Booked: **{selected_room['name']}** on "
-                                f"{DAY_NAMES[selected_date.weekday()]} {selected_date.strftime('%d %b')} "
-                                f"for **{project_name}**. "
-                                f"You can view it under **My Bookings**."
-                            )
-                        except Exception:
-                            st.error("This room is already booked on this day.")
-            else:
-                st.warning(f"No rooms available on {DAY_NAMES[selected_date.weekday()]} "
-                           f"for a team of {team_size}.")
+                           f"You can view it under **Manage Bookings**.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
