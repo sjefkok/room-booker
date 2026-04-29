@@ -234,25 +234,35 @@ elif page == "📅 Week Overview":
         all_bookings = allocations + directs
         if all_bookings:
             st.markdown("---")
-            st.subheader("📥 Download bookings")
-            download_rows = []
-            for b in sorted(all_bookings, key=lambda x: (x.get("date", ""), x.get("room_name", ""))):
+            # One row per project, day columns show room name
+            from collections import defaultdict
+            grouped = defaultdict(lambda: {"Mon": "", "Tue": "", "Wed": "", "Thu": "", "Fri": "",
+                                           "requester": "", "team_size": ""})
+            for b in all_bookings:
+                project = b.get("project_name", "")
                 d = date.fromisoformat(b["date"])
+                day = DAY_ABBR[d.weekday()]
+                grouped[project]["requester"] = b.get("requester", "")
+                grouped[project]["team_size"] = b.get("team_size", "")
+                grouped[project][day] = b.get("room_name", "")
+
+            download_rows = []
+            for project in sorted(grouped.keys()):
+                info = grouped[project]
                 download_rows.append({
-                    "Day": DAY_NAMES[d.weekday()],
-                    "Date": d.strftime("%d %b %Y"),
-                    "Project": b.get("project_name", ""),
-                    "Requester": b.get("requester", ""),
-                    "Room": b.get("room_name", ""),
-                    "Capacity": b.get("capacity", ""),
-                    "Floor": b.get("floor", ""),
-                    "Team size": b.get("team_size", ""),
+                    "Project": project,
+                    "Requester": info["requester"],
+                    "Team size": info["team_size"],
+                    "Mon": info["Mon"],
+                    "Tue": info["Tue"],
+                    "Wed": info["Wed"],
+                    "Thu": info["Thu"],
+                    "Fri": info["Fri"],
                 })
             download_df = pd.DataFrame(download_rows)
-            st.dataframe(download_df, use_container_width=True, hide_index=True)
             csv = download_df.to_csv(index=False).encode("utf-8")
             st.download_button(
-                label="⬇️ Download as CSV",
+                label="⬇️ Download bookings as CSV",
                 data=csv,
                 file_name=f"room_bookings_week_{selected_monday.isocalendar()[1]}.csv",
                 mime="text/csv",
