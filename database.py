@@ -145,34 +145,11 @@ def seed_rooms():
             next_id += 1
 
 
-# ── Rooms CRUD ────────────────────────────────────────────────────────────────
+# ── Rooms ─────────────────────────────────────────────────────────────────────
 
 def get_all_rooms():
     records = _all_records("rooms")
     return sorted(records, key=lambda r: (r.get("floor", ""), r.get("name", "")))
-
-
-def add_room(name: str, capacity: int, floor: str):
-    ws = _get_worksheet("rooms")
-    new_id = _next_id("rooms")
-    ws.append_row([new_id, name, capacity, floor])
-    _invalidate_cache("rooms")
-
-
-def update_room(room_id: int, name: str, capacity: int, floor: str):
-    row_idx = _find_row_index("rooms", room_id)
-    if row_idx:
-        ws = _get_worksheet("rooms")
-        ws.update(f"A{row_idx}:D{row_idx}", [[room_id, name, capacity, floor]])
-        _invalidate_cache("rooms")
-
-
-def delete_room(room_id: int):
-    row_idx = _find_row_index("rooms", room_id)
-    if row_idx:
-        ws = _get_worksheet("rooms")
-        ws.delete_rows(row_idx)
-        _invalidate_cache("rooms")
 
 
 # ── Requests CRUD ─────────────────────────────────────────────────────────────
@@ -295,13 +272,6 @@ def get_allocations_for_week(week_start: str, week_end: str):
     return [_enrich_allocation(r, rooms) for r in deduped]
 
 
-def get_allocations_for_date(date_str: str):
-    records = _all_records("allocations")
-    rooms = {r["id"]: r for r in get_all_rooms()}
-    result = [r for r in records if r.get("date") == date_str]
-    return [_enrich_allocation(r, rooms) for r in sorted(result, key=lambda r: r.get("room_id", 0))]
-
-
 def cancel_allocation(allocation_id: int):
     row_idx = _find_row_index("allocations", allocation_id)
     if row_idx:
@@ -310,22 +280,7 @@ def cancel_allocation(allocation_id: int):
         _invalidate_cache("allocations")
 
 
-# ── Direct Bookings (post-deadline) ──────────────────────────────────────────
-
-def create_direct_booking(room_id: int, date_str: str, project_name: str,
-                          requester: str, team_size: int):
-    # Check if room already booked
-    booked = get_booked_room_ids_for_date(date_str)
-    if room_id in booked:
-        raise ValueError("Kamer is al geboekt op deze dag.")
-    ws = _get_worksheet("direct_bookings")
-    new_id = _next_id("direct_bookings")
-    ws.append_row([
-        new_id, room_id, date_str, project_name, requester, team_size,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    ])
-    _invalidate_cache("direct_bookings")
-
+# ── Direct Bookings ───────────────────────────────────────────────────────────
 
 def _enrich_direct(d: dict, rooms_by_id: dict) -> dict:
     d = dict(d)  # copy to avoid mutating cache
@@ -343,13 +298,6 @@ def get_direct_bookings_for_week(week_start: str, week_end: str):
     return [_enrich_direct(r, rooms) for r in sorted(result, key=lambda r: (r.get("date", ""), r.get("room_id", 0)))]
 
 
-def get_direct_bookings_for_date(date_str: str):
-    records = _all_records("direct_bookings")
-    rooms = {r["id"]: r for r in get_all_rooms()}
-    result = [r for r in records if r.get("date") == date_str]
-    return [_enrich_direct(r, rooms) for r in sorted(result, key=lambda r: r.get("room_id", 0))]
-
-
 def cancel_direct_booking(booking_id: int):
     row_idx = _find_row_index("direct_bookings", booking_id)
     if row_idx:
@@ -359,16 +307,6 @@ def cancel_direct_booking(booking_id: int):
 
 
 # ── Queries ───────────────────────────────────────────────────────────────────
-
-def get_all_bookings_for_date(date_str: str):
-    allocs = get_allocations_for_date(date_str)
-    directs = get_direct_bookings_for_date(date_str)
-    for d in directs:
-        d["source"] = "direct"
-    for a in allocs:
-        a["source"] = "allocation"
-    return allocs + directs
-
 
 def get_booked_room_ids_for_date(date_str: str):
     alloc_records = _all_records("allocations")
@@ -443,69 +381,6 @@ def get_all_upcoming_bookings():
             results.append(enriched)
 
     return sorted(results, key=lambda r: r.get("date", ""))
-
-
-def get_bookings_by_project(project_name: str):
-    today = date.today().isoformat()
-    rooms = {r["id"]: r for r in get_all_rooms()}
-    results = []
-
-    for a in _all_records("allocations"):
-        if a.get("project_name") == project_name and a.get("date", "") >= today:
-            _enrich_allocation(a, rooms)
-            a["source"] = "allocation"
-            results.append(a)
-
-    for d in _all_records("direct_bookings"):
-        if d.get("project_name") == project_name and d.get("date", "") >= today:
-            _enrich_direct(d, rooms)
-            d["source"] = "direct"
-            results.append(d)
-
-    return sorted(results, key=lambda r: r.get("date", ""))
-
-
-def get_bookings_by_requester(requester: str):
-    today = date.today().isoformat()
-    rooms = {r["id"]: r for r in get_all_rooms()}
-    results = []
-
-    for a in _all_records("allocations"):
-        if a.get("requester") == requester and a.get("date", "") >= today:
-            _enrich_allocation(a, rooms)
-            a["source"] = "allocation"
-            results.append(a)
-
-    for d in _all_records("direct_bookings"):
-        if d.get("requester") == requester and d.get("date", "") >= today:
-            _enrich_direct(d, rooms)
-            d["source"] = "direct"
-            results.append(d)
-
-    return sorted(results, key=lambda r: r.get("date", ""))
-
-
-def get_occupancy_stats(week_start: str, week_end: str):
-    rooms = get_all_rooms()
-    allocs = _all_records("allocations")
-    directs = _all_records("direct_bookings")
-    result = []
-    for room in rooms:
-        count = 0
-        for a in allocs:
-            if a.get("room_id") == room["id"] and week_start <= a.get("date", "") <= week_end:
-                count += 1
-        for d in directs:
-            if d.get("room_id") == room["id"] and week_start <= d.get("date", "") <= week_end:
-                count += 1
-        result.append({
-            "room_name": room["name"],
-            "floor": room["floor"],
-            "capacity": room["capacity"],
-            "booked_days": count,
-            "occupancy_pct": round(count / 5 * 100),
-        })
-    return result
 
 
 # ── Init on import ────────────────────────────────────────────────────────────
