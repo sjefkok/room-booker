@@ -478,27 +478,3 @@ def get_occupancy_stats(week_start: str, week_end: str):
 
 init_db()
 seed_rooms()
-
-
-def cleanup_duplicate_allocations():
-    """Remove duplicate rows from the allocations sheet (same room_id + date)."""
-    ws = _get_worksheet("allocations")
-    rows = _api_call(ws.get_all_values)
-    if len(rows) <= 1:
-        return
-    seen = set()
-    to_delete = []
-    for i, row in enumerate(rows):
-        if i == 0:
-            continue  # header
-        key = (row[2], row[3])  # room_id, date
-        if key in seen:
-            to_delete.append(i + 1)
-        else:
-            seen.add(key)
-    for idx in reversed(to_delete):
-        _api_call(ws.delete_rows, idx)
-    if to_delete:
-        _invalidate_cache("allocations")
-
-cleanup_duplicate_allocations()
