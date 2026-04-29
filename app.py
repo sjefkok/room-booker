@@ -120,17 +120,25 @@ if page == "📋 New Request":
             elif not selected_days:
                 st.error("Select at least one day.")
             else:
-                db.create_request(
-                    project_name=project_name.strip(),
-                    requester=requester.strip(),
-                    team_size=team_size,
-                    week_start=selected_monday.isoformat(),
-                    desired_days=selected_days,
-                )
-                st.balloons()
-                st.success(f"✅ Request submitted for **{project_name}** — "
-                           f"{len(selected_days)} day(s) requested. "
-                           f"You can view it under **Manage Bookings**.")
+                # Check if this project already has a request for this week
+                existing = db.get_requests_for_week(selected_monday.isoformat())
+                duplicate = [r for r in existing if r["project_name"].strip().lower() == project_name.strip().lower()]
+                if duplicate:
+                    st.error(f"⚠️ A request for **{project_name}** already exists for this week. "
+                             f"Only one request per project per week is allowed. "
+                             f"You can cancel the existing request under **Manage Bookings**.")
+                else:
+                    db.create_request(
+                        project_name=project_name.strip(),
+                        requester=requester.strip(),
+                        team_size=team_size,
+                        week_start=selected_monday.isoformat(),
+                        desired_days=selected_days,
+                    )
+                    st.balloons()
+                    st.success(f"✅ Request submitted for **{project_name}** — "
+                               f"{len(selected_days)} day(s) requested. "
+                               f"You can view it under **Manage Bookings**.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
