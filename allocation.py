@@ -42,6 +42,10 @@ def is_before_deadline(target_monday: date) -> bool:
     """True if we're still before Thursday 17:00 of the week BEFORE target_monday."""
     now = datetime.now()
     # Deadline = Thursday 17:00 of the week before the target week.
+    # TEMP TEST: Week 19 deadline = Wed 29 Apr 17:25
+    if target_monday == date(2026, 5, 4):
+        deadline = datetime(2026, 4, 29, 17, 25, 0)
+        return now < deadline
     deadline_thursday = target_monday - timedelta(days=4)  # Monday - 4 = Thursday before
     deadline = datetime(deadline_thursday.year, deadline_thursday.month,
                         deadline_thursday.day, 17, 0, 0)
