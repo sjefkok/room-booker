@@ -92,6 +92,8 @@ if page == "📋 New Request":
             f"⏰ **Request phase** — Deadline: Thursday {deadline_thu.strftime('%d %b %Y')} at 17:00. "
             f"After the deadline, the allocation will be finalized automatically."
         )
+        st.warning("⚠️ Only **one request per project** per week is allowed. "
+                   "If you need to change an existing request, cancel it first under **Manage Bookings**.")
 
         st.markdown("---")
 
