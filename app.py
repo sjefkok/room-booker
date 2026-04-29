@@ -21,12 +21,12 @@ def _auto_allocate():
         requests = db.get_requests_for_week(week_start)
         if not requests:
             continue
-        # Delete requests FIRST to prevent double allocation from concurrent loads
+        # Keep a copy of requests, delete originals, then allocate using the copy.
+        # This prevents double allocation from concurrent page loads.
         req_copies = [dict(r) for r in requests]
         for req in requests:
             db.delete_request(req["id"])
-        # Now run allocation
-        result = alloc.run_allocation(week_start)
+        result = alloc.run_allocation(week_start, prefetched_requests=req_copies)
         # Show allocation result to user
         st.toast(f"✅ Auto-allocated Week {monday.isocalendar()[1]}: "
                  f"{len(result['allocations'])} room(s) assigned, "

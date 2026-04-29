@@ -41,9 +41,9 @@ def week_dates(monday: date) -> list[date]:
 def is_before_deadline(target_monday: date) -> bool:
     """True if we're still before Thursday 17:00 of the week BEFORE target_monday."""
     now = datetime.now()
-    # TEMP TEST: Week 19 deadline = Tue 29 Apr 16:00 UTC (= 18:00 CEST)
+    # TEMP TEST: Week 19 deadline = Tue 29 Apr 22:30 UTC (= 00:30 CEST Apr 30)
     if target_monday == date(2026, 5, 4):
-        deadline = datetime(2026, 4, 29, 16, 0, 0)
+        deadline = datetime(2026, 4, 29, 22, 30, 0)
         return now < deadline
     # Deadline = Thursday 17:00 of the week before the target week.
     deadline_thursday = target_monday - timedelta(days=4)  # Monday - 4 = Thursday before
@@ -80,9 +80,14 @@ def get_available_rooms(date_str: str, team_size: int = 1) -> list[dict]:
 
 # ── Optimised round-based allocation ─────────────────────────────────────────
 
-def run_allocation(week_start: str) -> dict:
+def run_allocation(week_start: str, prefetched_requests: list | None = None) -> dict:
     """
     Run the allocation algorithm for a given week.
+
+    Args:
+        week_start: ISO date string of the Monday.
+        prefetched_requests: Optional pre-loaded requests list (to avoid
+            re-reading from the sheet after they've been deleted).
 
     Returns:
         {
@@ -100,7 +105,7 @@ def run_allocation(week_start: str) -> dict:
     db.clear_allocations_for_week(week_start, week_end)
 
     # Load requests
-    requests = db.get_requests_for_week(week_start)
+    requests = prefetched_requests if prefetched_requests is not None else db.get_requests_for_week(week_start)
     rooms = db.get_all_rooms()
 
     if not requests:
