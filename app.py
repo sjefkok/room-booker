@@ -95,9 +95,9 @@ if page == "📋 New Request":
         selected_label = st.selectbox("Week", list(week_options.keys()))
         selected_monday = week_options[selected_label]
 
-        deadline_thu = selected_monday - timedelta(days=4)
+        deadline_fri = selected_monday - timedelta(days=3)
         st.info(
-            f"⏰ **Request phase** — Deadline: Thursday {deadline_thu.strftime('%d %b %Y')} at 17:00. "
+            f"⏰ **Request phase** — Deadline: Friday {deadline_fri.strftime('%d %b %Y')} at 16:00. "
             f"After the deadline, the allocation will be finalized automatically."
         )
         st.warning("⚠️ Only **one request per project** per week is allowed. "

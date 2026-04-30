@@ -39,12 +39,12 @@ def week_dates(monday: date) -> list[date]:
 
 
 def is_before_deadline(target_monday: date) -> bool:
-    """True if we're still before Thursday 17:00 CEST of the week BEFORE target_monday."""
+    """True if we're still before Friday 16:00 CEST of the week BEFORE target_monday."""
     now = datetime.now()
-    # Deadline = Thursday 17:00 CEST = 15:00 UTC (Streamlit Cloud runs UTC).
-    deadline_thursday = target_monday - timedelta(days=4)  # Monday - 4 = Thursday before
-    deadline = datetime(deadline_thursday.year, deadline_thursday.month,
-                        deadline_thursday.day, 15, 0, 0)
+    # Deadline = Friday 16:00 CEST = 14:00 UTC (Streamlit Cloud runs UTC).
+    deadline_friday = target_monday - timedelta(days=3)  # Monday - 3 = Friday before
+    deadline = datetime(deadline_friday.year, deadline_friday.month,
+                        deadline_friday.day, 14, 0, 0)
     return now < deadline
 
 
