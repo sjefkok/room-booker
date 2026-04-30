@@ -69,7 +69,7 @@ st.sidebar.title("🏢 Strategy — Room Booker")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "Navigation",
-    ["📋 New Request", "📅 Week Overview", "📌 Manage Bookings"],
+    ["📋 New Request", "📅 Week Overview", "📌 Manage Bookings", "🔒 Admin"],
 )
 
 st.sidebar.markdown("---")
@@ -165,7 +165,8 @@ elif page == "📅 Week Overview":
         ws, we = _get_week_range(monday)
         allocs = db.get_allocations_for_week(ws, we)
         directs = db.get_direct_bookings_for_week(ws, we)
-        if allocs or directs:
+        blocks = db.get_room_blocks_for_week(monday.isoformat())
+        if allocs or directs or blocks:
             weeks_with_bookings.append(monday)
 
     if not weeks_with_bookings:
@@ -200,6 +201,25 @@ elif page == "📅 Week Overview":
             day_abbr = DAY_ABBR[d.weekday()]
             matrix[b["room_name"]][day_abbr] = f"📁 {b['project_name']} - {b['requester']}"
 
+        # Fill with room blocks (reserved rooms)
+        blocks = db.get_room_blocks_for_week(selected_monday.isoformat())
+        rooms_by_id_map = {r["id"]: r for r in rooms}
+        for block in blocks:
+            room = rooms_by_id_map.get(block["room_id"])
+            if not room:
+                continue
+            for day_str in str(block["days"]).split(","):
+                day_str = day_str.strip()
+                if not day_str:
+                    continue
+                try:
+                    d = date.fromisoformat(day_str)
+                    day_abbr = DAY_ABBR[d.weekday()]
+                    if not matrix[room["name"]][day_abbr]:
+                        matrix[room["name"]][day_abbr] = f"🔒 {block['project_name']} (Reserved)"
+                except (ValueError, KeyError):
+                    pass
+
         # Display
         df = pd.DataFrame(matrix).T
         df.index.name = "Room"
@@ -210,7 +230,9 @@ elif page == "📅 Week Overview":
 
         # Style: color cells
         def color_cells(val):
-            if val and val.startswith("📁"):
+            if val and "🔒" in val:
+                return "background-color: #FFCDD2; color: #333; font-weight: bold;"
+            elif val and val.startswith("📁"):
                 return "background-color: #FFE082; color: #333; font-weight: bold;"
             elif val == "":
                 return "background-color: #C8E6C9; color: #2E7D32;"
@@ -223,6 +245,7 @@ elif page == "📅 Week Overview":
         <div style="display:flex; gap:20px; margin-top:8px;">
             <span style="background:#C8E6C9; padding:4px 12px; border-radius:4px;">🟢 Available</span>
             <span style="background:#FFE082; padding:4px 12px; border-radius:4px;">🟡 Booked</span>
+            <span style="background:#FFCDD2; padding:4px 12px; border-radius:4px;">🔴 Reserved</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -241,6 +264,21 @@ elif page == "📅 Week Overview":
 
         # Download bookings as CSV
         all_bookings = allocations + directs
+        # Include room blocks in bookings list
+        for block in blocks:
+            room = rooms_by_id_map.get(block["room_id"])
+            if not room:
+                continue
+            for day_str in str(block["days"]).split(","):
+                day_str = day_str.strip()
+                if day_str:
+                    all_bookings.append({
+                        "date": day_str,
+                        "room_name": room["name"],
+                        "project_name": block["project_name"],
+                        "requester": block["requester"],
+                        "team_size": "",
+                    })
         if all_bookings:
             st.markdown("---")
             # One row per project, day columns show room name
@@ -398,3 +436,131 @@ elif page == "📌 Manage Bookings":
             st.caption("No pending requests matching filters.")
     else:
         st.caption("No pending requests.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE: Admin
+# ══════════════════════════════════════════════════════════════════════════════
+
+elif page == "🔒 Admin":
+    st.title("🔒 Admin")
+
+    if "admin_authenticated" not in st.session_state:
+        st.session_state.admin_authenticated = False
+
+    if not st.session_state.admin_authenticated:
+        password = st.text_input("Password", type="password")
+        if st.button("🔑 Login", type="primary"):
+            if password == "Selma":
+                st.session_state.admin_authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+    else:
+        if st.sidebar.button("🚪 Logout Admin"):
+            st.session_state.admin_authenticated = False
+            st.rerun()
+
+        # ── Block a Room ──────────────────────────────────────────────
+        st.subheader("🔒 Block a Room")
+        st.caption("Reserve a room for a confidential project. "
+                   "Blocked rooms are excluded from the allocation algorithm.")
+
+        rooms = db.get_all_rooms()
+        room_options = {f"{r['name']} ({r['capacity']}p, {r['floor']})": r for r in rooms}
+
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_room_label = st.selectbox("Room", list(room_options.keys()))
+            project_name = st.text_input("Project name", placeholder="e.g. Project Phoenix",
+                                         key="admin_project")
+        with col2:
+            available_weeks = alloc.get_available_weeks()
+            week_options = {_week_label(m): m for m in available_weeks}
+            selected_week_label = st.selectbox("Week", list(week_options.keys()),
+                                               key="admin_week")
+            requester = st.text_input("Requester", placeholder="e.g. John Smith",
+                                      key="admin_requester")
+
+        selected_monday = week_options[selected_week_label]
+        days = alloc.week_dates(selected_monday)
+        day_cols = st.columns(5)
+        selected_days = []
+        for i, d in enumerate(days):
+            with day_cols[i]:
+                if st.checkbox(DAY_NAMES[i], key=f"block_day_{d.isoformat()}"):
+                    selected_days.append(d.isoformat())
+
+        if st.button("🔒 Block Room", type="primary", use_container_width=True):
+            if not project_name or not requester:
+                st.error("Please fill in project name and requester.")
+            elif not selected_days:
+                st.error("Select at least one day.")
+            else:
+                selected_room = room_options[selected_room_label]
+                # Check if room is already blocked for any of the selected days
+                existing_blocks = db.get_room_blocks_for_week(selected_monday.isoformat())
+                conflicts = []
+                for block in existing_blocks:
+                    if block["room_id"] == selected_room["id"]:
+                        block_days = [bd.strip() for bd in str(block["days"]).split(",")]
+                        for sd in selected_days:
+                            if sd in block_days:
+                                conflicts.append(sd)
+                if conflicts:
+                    conflict_names = ", ".join(
+                        DAY_NAMES[date.fromisoformat(c).weekday()] for c in conflicts
+                    )
+                    st.error(f"Room is already blocked on: {conflict_names}")
+                else:
+                    db.create_room_block(
+                        room_id=selected_room["id"],
+                        project_name=project_name.strip(),
+                        requester=requester.strip(),
+                        week_start=selected_monday.isoformat(),
+                        days=selected_days,
+                    )
+                    st.success(f"✅ Room **{selected_room['name']}** blocked for "
+                               f"**{project_name}** — {len(selected_days)} day(s).")
+                    st.rerun()
+
+        # ── Current Blocks ────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("📋 Current Room Blocks")
+
+        all_blocks = db.get_all_room_blocks()
+        rooms_by_id = {r["id"]: r for r in rooms}
+
+        # Filter to upcoming blocks only
+        today = date.today()
+        upcoming_blocks = []
+        for block in all_blocks:
+            try:
+                ws = date.fromisoformat(block["week_start"])
+                if ws + timedelta(days=4) >= today:
+                    upcoming_blocks.append(block)
+            except (ValueError, TypeError):
+                pass
+
+        if upcoming_blocks:
+            for block in upcoming_blocks:
+                room = rooms_by_id.get(block["room_id"], {})
+                room_name = room.get("name", "?")
+                ws = date.fromisoformat(block["week_start"])
+                week_lbl = _week_label(ws)
+                block_days = [bd.strip() for bd in str(block["days"]).split(",") if bd.strip()]
+                day_names = ", ".join(
+                    DAY_NAMES.get(date.fromisoformat(bd).weekday(), bd) for bd in block_days
+                )
+                col1, col2 = st.columns([5, 1])
+                with col1:
+                    st.write(f"**{room_name}** — {block['project_name']} "
+                             f"({block['requester']}) — {week_lbl} — {day_names}")
+                with col2:
+                    if st.button("❌", key=f"del_block_{block['id']}",
+                                 help="Remove block"):
+                        db.delete_room_block(block["id"])
+                        st.success("Block removed.")
+                        st.rerun()
+        else:
+            st.info("No room blocks set.")

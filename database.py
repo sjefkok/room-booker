@@ -29,6 +29,7 @@ SHEET_HEADERS = {
     "allocations":     ["id", "request_id", "room_id", "date", "project_name", "requester", "team_size", "created_at"],
     "direct_bookings": ["id", "room_id", "date", "project_name", "requester", "team_size", "created_at"],
     "request_archive": ["id", "project_name", "requester", "team_size", "week_start", "desired_days", "num_days", "created_at"],
+    "room_blocks":     ["id", "room_id", "project_name", "requester", "week_start", "days", "created_at"],
 }
 
 
@@ -327,9 +328,15 @@ def cancel_direct_booking(booking_id: int):
 def get_booked_room_ids_for_date(date_str: str):
     alloc_records = _all_records("allocations")
     direct_records = _all_records("direct_bookings")
+    block_records = _all_records("room_blocks")
     alloc_ids = {r["room_id"] for r in alloc_records if r.get("date") == date_str}
     direct_ids = {r["room_id"] for r in direct_records if r.get("date") == date_str}
-    return alloc_ids | direct_ids
+    block_ids = set()
+    for b in block_records:
+        days = [d.strip() for d in str(b.get("days", "")).split(",")]
+        if date_str in days:
+            block_ids.add(b["room_id"])
+    return alloc_ids | direct_ids | block_ids
 
 
 def get_week_fairness(week_start: str, week_end: str):
@@ -397,6 +404,37 @@ def get_all_upcoming_bookings():
             results.append(enriched)
 
     return sorted(results, key=lambda r: r.get("date", ""))
+
+
+# ── Room Blocks ───────────────────────────────────────────────────────────────
+
+def create_room_block(room_id: int, project_name: str, requester: str,
+                      week_start: str, days: list[str]):
+    ws = _get_worksheet("room_blocks")
+    new_id = _next_id("room_blocks")
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _api_call(ws.append_row, [
+        new_id, room_id, project_name, requester,
+        week_start, ",".join(days), created_at,
+    ])
+    _invalidate_cache("room_blocks")
+
+
+def delete_room_block(block_id: int):
+    row_idx = _find_row_index("room_blocks", block_id)
+    if row_idx:
+        ws = _get_worksheet("room_blocks")
+        _api_call(ws.delete_rows, row_idx)
+        _invalidate_cache("room_blocks")
+
+
+def get_room_blocks_for_week(week_start: str) -> list[dict]:
+    records = _all_records("room_blocks")
+    return [r for r in records if r.get("week_start") == week_start]
+
+
+def get_all_room_blocks() -> list[dict]:
+    return _all_records("room_blocks")
 
 
 # ── Init on import ────────────────────────────────────────────────────────────
