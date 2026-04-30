@@ -476,7 +476,9 @@ elif page == "🔒 Admin":
                                          key="admin_project")
         with col2:
             available_weeks = alloc.get_available_weeks()
-            week_options = {_week_label(m): m for m in available_weeks}
+            # Exclude current week — rooms already allocated
+            future_weeks = [m for m in available_weeks if m > _monday_of(date.today())]
+            week_options = {_week_label(m): m for m in future_weeks}
             selected_week_label = st.selectbox("Week", list(week_options.keys()),
                                                key="admin_week")
             requester = st.text_input("Requester", placeholder="e.g. John Smith",
