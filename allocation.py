@@ -165,18 +165,19 @@ def run_allocation(week_start: str, prefetched_requests: list | None = None) -> 
             if not day_candidates or not avail_rooms:
                 continue
 
-            # If more candidates than rooms: remove those with most alternatives
+            # If more candidates than rooms: remove those best served so far
             while len(day_candidates) > len(avail_rooms):
-                # Score each candidate: how many OTHER remaining days do they have?
-                # (excluding the current day)
+                # Fairness-weighted removal: prioritize removing the project that
+                # (1) already has the highest allocation ratio (allocated/requested)
+                # (2) has the most alternative remaining days (tiebreaker)
                 day_candidates.sort(
-                    key=lambda pr: len([d for d in pr["remaining_days"] if d != day]),
-                    reverse=True,
+                    key=lambda pr: (
+                        -(len(pr["allocated_days"]) / len(pr["desired_days"])),
+                        -len([d for d in pr["remaining_days"] if d != day]),
+                    ),
                 )
-                # Remove the one with most alternatives
+                # Remove the one already best served (highest ratio, most alternatives)
                 removed = day_candidates.pop(0)
-                # Don't count this day as a remaining day for this project in future rounds
-                # (they might get it in a later round if space opens up)
 
             # Allocate rooms to remaining candidates
             for pr in day_candidates:
